@@ -1,13 +1,16 @@
 // Hematite demo: a signature may name the return value and put an optional `=`
 // before the body. Everything inside the braces is 100% normal Rust and there is
 // no `ret` variable in scope there.
+//
+// The body follows idiomatic Rust: a tail expression for the value, and `return`
+// only for early exits.
 
 fn add(a: i32, b: i32) -> ret: i32 = {
-    return a + b;
+    a + b
 }
 
 fn mul(a: i32, b: i32) -> r: i32 {
-    return a * b;
+    a * b
 }
 
 fn classify(x: i32) -> label: &'static str {

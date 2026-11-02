@@ -4,7 +4,7 @@ Syntax highlighting for `.hm` files: Rust plus Hematite's two signature-only add
 
 ```rust
 fn add(a: i32, b: i32) -> ret: i32 = {
-    return a + b;
+    a + b
 }
 ```
 

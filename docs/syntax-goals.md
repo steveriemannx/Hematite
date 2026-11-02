@@ -6,7 +6,8 @@
 >
 > **v0.4 changes (per the latest feedback)**: the function body **never contains `ret`**.
 > The v0.3 "assignment is return" sugar is removed: `ret = e;` is not part of the language;
-> the body is ordinary Rust (`return` / a tail expression / nothing for unit functions).
+> the body is ordinary Rust (a tail expression for the value; `return` only for early
+> exits; nothing for unit functions).
 > The named return `-> name: T` and the optional `=` are **signature-only declarations**
 > and are erased during lowering.
 
@@ -17,25 +18,29 @@
 The two additions exist **only in the signature**; the function body is 100% normal Rust:
 
 ```rust
-// 1) named return + optional `=` (the body uses a normal `return`)
-fn add(a: i32, b: i32) -> ret: i32 = { return a + b }
+// 1) named return + optional `=`; the body is a tail expression
+fn add(a: i32, b: i32) -> ret: i32 = { a + b }
 
-// 2) `=` may be omitted
-fn add(a: i32, b: i32) -> c: i32 { return a + b }
+// 2) `=` may be omitted; early exits still use ordinary `return`
+fn classify(n: i32) -> label: &'static str {
+    if n < 0 { return "negative"; }
+    if n == 0 { return "zero"; }
+    "positive"
+}
 
-// 3) unit function: nothing in the body
+// 3) unit function: nothing to return
 fn log(msg: &str) -> out: () { println!("{msg}"); }
 
 // 4) plain Rust, valid as-is
-fn add(a: i32, b: i32) -> i32 { a + b }
+fn add_plain(a: i32, b: i32) -> i32 { a + b }
 ```
 
 Lowering only "erases"; **not a single byte of the body is touched**:
 
 ```rust
-fn add(a: i32, b: i32) -> ret: i32 = { return a + b }
+fn add(a: i32, b: i32) -> ret: i32 = { a + b }
 // lowered ↓
-fn add(a: i32, b: i32) -> i32 { return a + b }
+fn add(a: i32, b: i32) -> i32 { a + b }
 ```
 
 ---
@@ -66,7 +71,7 @@ fn add(a: i32, b: i32) -> i32 { return a + b }
 |---|---|---|
 | **G1** | Named return `-> name: Type` | Names the return value in the signature (self-documenting; a placeholder for future named-return/contract/multi-value features) |
 | **G2** | Optional function-body `=` | May be written or omitted; its only meaning is enabling the default name `ret` when the name is omitted (still just a declaration) |
-| **G3** | No slot name in the body | The name is not a variable and is not bound inside the body; use a normal `return` / tail expression / empty unit block |
+| **G3** | No slot name in the body | The name is not a variable and is not bound inside the body; use a tail expression (or `return` for early exits), or nothing for unit functions |
 
 Nothing else is added.
 
@@ -106,14 +111,14 @@ the function-body `=`.
 
 | # | Form | Verdict | Lowering / note |
 |---|---|---|---|
-| 1 | `fn add(a: i32, b: i32) -> c: i32 = { return a + b }` | ✅ | `fn add(a: i32, b: i32) -> i32 { return a + b }` |
-| 2 | `fn add(a: i32, b: i32) -> c: i32 { return a + b }` | ✅ | same, `=` is optional |
-| 3 | `fn add(a: i32, b: i32) -> i32 = { ret = a + b; }` | ❌ rustc E0425 | there is no `ret` variable in the body; write `return a + b;` or use a tail expression |
+| 1 | `fn add(a: i32, b: i32) -> c: i32 = { a + b }` | ✅ | `fn add(a: i32, b: i32) -> i32 { a + b }` |
+| 2 | `fn add(a: i32, b: i32) -> c: i32 { a + b }` | ✅ | same, `=` is optional |
+| 3 | `fn add(a: i32, b: i32) -> i32 = { ret = a + b; }` | ❌ rustc E0425 | there is no `ret` variable in the body; use a tail expression (`a + b`) or an ordinary `return a + b;` |
 | 4 | `fn f() -> ret: i32 = { return 1 }` | ✅ | explicitly uses the default name |
 | 5 | `fn f() -> i32 = { 1 }` | ✅ | omitted name ⇒ default `ret` (declaration level) |
 | 6 | `fn f() = { }` | ✅ | no return type + `=` ⇒ equivalent to `fn f() { }` |
 | 7 | `fn f() -> i32 { 1 }` | ✅ | plain Rust, byte-identical |
-| 8 | `fn log(m: &str) -> out: () { println!("{m}"); }` | ✅ | unit: no `return` in the body |
+| 8 | `fn log(m: &str) -> out: () { println!("{m}"); }` | ✅ | unit: nothing to return |
 | 9 | `fn f() -> c: impl Iterator<Item = i32> { std::iter::empty() }` | ✅ | the name is only a declaration; the type is preserved |
 | 10 | `trait T { fn f(&self) -> c: i32; }` | ✅ | declaration-only positions are allowed (the name is documentation) |
 | 11 | `type F = fn(i32) -> i32;` | ✅ | a function pointer type is not a function definition; untouched |
@@ -121,6 +126,7 @@ the function-body `=`.
 | 13 | closure `\|x\| -> c: T { … }` | ❌ syntax error | closures have no named return; not supported in v0 |
 | 14 | `fn` templates inside `macro_rules!` | ✅ left as-is | the sugar does not reach into macros |
 | 15 | `fn f() -> ret: i32 = { ret = 1; }` | ⚠️ W0001 | the body mentions the slot name and assigns to it ⇒ `hm` warns that there is no such variable; rustc then reports E0425 |
+| 16 | `fn find(xs: &[i32]) -> pos: Option<usize> { if xs.is_empty() { return None; } Some(1) }` | ✅ | `return` is ordinary Rust and is used for early exits; the final value is a tail expression |
 
 ---
 
@@ -182,8 +188,8 @@ Semantics notes:
 ## 7. Formatting (`hm fmt`, draft, not implemented in v0)
 
 ```rust
-fn add(a: i32, b: i32) -> ret: i32 { return a + b; }
-fn add(a: i32, b: i32) -> i32 = { return a + b; }
+fn add(a: i32, b: i32) -> ret: i32 { a + b }
+fn add(a: i32, b: i32) -> i32 = { a + b }
 ```
 
 - One space before `->`; no space between `name` and `:`, one space after `:`; when `=` is
@@ -198,7 +204,7 @@ fn add(a: i32, b: i32) -> i32 = { return a + b; }
 |---|---|---|
 | E0001 | hm | `=` must be followed by a block |
 | E0425, etc. | rustc | the body uses an undeclared `ret` (the name is not bound in the body) |
-| W0001 | hm | the body mentions the slot name and assigns to it (e.g. `ret = 1;`) ⇒ hint that there is no such variable and a normal `return` should be used |
+| W0001 | hm | the body mentions the slot name and assigns to it (e.g. `ret = 1;`) ⇒ hint that there is no such variable; use a tail expression, or `return` for an early exit |
 | position mapping | hm | rustc's `file:line:col` maps back to `.hm` (lines unchanged, columns compensated) |
 
 Example:
@@ -280,7 +286,7 @@ error[E0425]: cannot find value `ret` in this scope
 |---|---|---|
 | Function header | `add: (a: i32, b: i32) -> i32 =` | `fn add(a: i32, b: i32) -> i32` (`=` optional) |
 | Named return | `-> (ret: i32) =` (return parameter list) | `-> ret: i32` (single return, no parens, declaration only) |
-| Return variable | writable variable in the body, returned at the end | **no variable**; use a normal `return` / tail expression in the body |
+| Return variable | writable variable in the body, returned at the end | **no variable**; use a tail expression (or `return` for early exits) in the body |
 | Default return name | none | `ret` (only available when `=` is written; declaration level) |
 | Function body | `= { … }` or `= expr;` | only `{ … }` (`=` optional) |
 | Multi-value returns | `-> (a: T, b: U)` | non-goal (v0) |

@@ -4,16 +4,19 @@ Hematite is a **syntax layer for Rust**: a function signature may name its retur
 put an optional `=` before the body. `hm` erases both before handing the file to rustc.
 
 ```rust
-fn add(a: i32, b: i32) -> ret: i32 = { return a + b }
+fn add(a: i32, b: i32) -> ret: i32 = { a + b }
 // lowered to
-fn add(a: i32, b: i32) -> i32 { return a + b }
+fn add(a: i32, b: i32) -> i32 { a + b }
 ```
 
 - `-> name: Type`: named return — a signature-only declaration (self-documenting)
 - `= { ... }`: optional `=` — also signature-only; when the name is omitted the default name is `ret`
-- The braces contain 100% normal Rust: `return ...;` / a tail expression / nothing for unit functions
+- The braces contain 100% normal Rust: a tail expression for the value (early exits use `return`),
+  nothing for unit functions
 - There is **no** `ret` variable inside the body; lowering deletes only the two signature tokens
   and leaves the body byte for byte unchanged
+- A trailing `return` is unnecessary and `clippy::needless_return` flags it, so all examples here use
+  tail expressions and keep `return` for early exits only
 
 Full spec: [docs/syntax-goals.md](docs/syntax-goals.md) (v0.4).
 
