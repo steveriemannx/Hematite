@@ -1,6 +1,7 @@
 // Hematite demo: a signature may name the return value and put an optional `=`
-// before the body. Everything inside the braces is 100% normal Rust and there is
-// no `ret` variable in scope there.
+// before the body. Every function below writes the `=`; removing it changes
+// nothing. Everything inside the braces is 100% normal Rust and there is no
+// `ret` variable in scope there.
 //
 // The body follows idiomatic Rust: a tail expression for the value, and `return`
 // only for early exits.
@@ -9,22 +10,22 @@ fn add(a: i32, b: i32) -> ret: i32 = {
     a + b
 }
 
-fn mul(a: i32, b: i32) -> r: i32 {
+fn mul(a: i32, b: i32) -> r: i32 = {
     a * b
 }
 
-fn classify(x: i32) -> label: &'static str {
+fn classify(x: i32) -> label: &'static str = {
     if x < 0 {
         return "negative";
     }
     "non-negative"
 }
 
-fn log(msg: &str) -> out: () {
+fn log(msg: &str) -> out: () = {
     println!("{msg}");
 }
 
-fn sum(xs: &[i32]) -> total: i32 {
+fn sum(xs: &[i32]) -> total: i32 = {
     let mut acc = 0;
     for x in xs {
         acc += *x;
@@ -32,7 +33,7 @@ fn sum(xs: &[i32]) -> total: i32 {
     acc
 }
 
-fn main() {
+fn main() = {
     log("hematite demo");
     println!("add(2, 3)      = {}", add(2, 3));
     println!("mul(2, 3)      = {}", mul(2, 3));

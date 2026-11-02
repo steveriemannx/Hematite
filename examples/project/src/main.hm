@@ -3,7 +3,7 @@ mod util;
 
 use math::add;
 
-fn main() -> code: std::process::ExitCode {
+fn main() -> code: std::process::ExitCode = {
     let total = math::sum(&[1, 2, 3, 4]);
     println!("add(2, 3)  = {}", add(2, 3));
     println!("sum(1..4)  = {}", total);

@@ -2,7 +2,7 @@ pub fn add(a: i32, b: i32) -> sum: i32 = {
     a + b
 }
 
-pub fn sum(xs: &[i32]) -> total: i32 {
+pub fn sum(xs: &[i32]) -> total: i32 = {
     let mut acc = 0;
     for x in xs {
         acc += *x;
