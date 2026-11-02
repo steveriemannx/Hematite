@@ -1,0 +1,13 @@
+[package]
+name = "hematite"
+version = "0.1.0"
+edition = "2021"
+description = "Hematite: a cpp2-flavoured syntax layer for Rust"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "hm"
+path = "src/main.rs"
+
+[profile.release]
+strip = true

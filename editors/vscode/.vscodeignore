@@ -1,0 +1,8 @@
+.vscodeignore
+.vscode/**
+**/.gitignore
+**/node_modules/**
+**/.npm-cache/**
+**/*.vsix
+**/test/**
+**/scripts/**

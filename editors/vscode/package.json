@@ -1,0 +1,53 @@
+{
+  "name": "hematite",
+  "displayName": "Hematite",
+  "description": "Hematite (.hm) syntax highlighting: Rust plus cpp2-flavoured named returns (`-> name: T`) and an optional `=` before the function body",
+  "version": "0.1.0",
+  "publisher": "hematite",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "hematite",
+    "hm",
+    "rust",
+    "cpp2",
+    "syntax",
+    "syntax highlighting"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "hematite",
+        "extensions": [
+          ".hm"
+        ],
+        "aliases": [
+          "Hematite",
+          "hematite",
+          "hm"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "hematite",
+        "scopeName": "source.hematite",
+        "path": "./syntaxes/hematite.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "gen": "node scripts/gen-grammar.cjs",
+    "test": "node test/tokenize.cjs"
+  },
+  "devDependencies": {
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  }
+}

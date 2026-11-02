@@ -1,0 +1,7 @@
+[package]
+name = "hm-demo-project"
+version = "0.1.0"
+edition = "2021"
+
+# Keep this an independent workspace so the parent directories cannot affect it.
+[workspace]

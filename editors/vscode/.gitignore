@@ -1,0 +1,4 @@
+node_modules/
+*.vsix
+.npm-cache/
+syntaxes/hematite.tmLanguage.json
