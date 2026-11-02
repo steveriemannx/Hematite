@@ -117,3 +117,12 @@ examples/demo.hm       # single-file example
 examples/project/      # multi-file cargo crate example (main.hm + math.hm + util.rs)
 editors/vscode/        # VS Code syntax highlighting extension (.hm)
 ```
+
+## License
+
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
+
+at your option.
