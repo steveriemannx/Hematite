@@ -43,11 +43,11 @@ grammar.information_for_contributors = [
 ];
 
 // ------------------------------------------------------ Hematite additions
-grammar.repository["hematite-signature"] = {
+grammar.repository["hematite-named-return"] = {
   patterns: [
     {
       comment:
-        "Hematite: named return slot `-> name:` (name is any identifier, not a keyword)",
+        "Hematite: named return slot `-> name:` (functions and closures; name is any identifier)",
       match: "(->)\\s*((?:r#(?!crate|[Ss]elf|super))?[A-Za-z_][A-Za-z0-9_]*)\\s*(:)",
       captures: {
         1: { name: "keyword.operator.arrow.hematite" },
@@ -55,6 +55,12 @@ grammar.repository["hematite-signature"] = {
         3: { name: "punctuation.separator.colon.return-name.hematite" },
       },
     },
+  ],
+};
+
+grammar.repository["hematite-signature"] = {
+  patterns: [
+    { include: "#hematite-named-return" },
     {
       comment: "Hematite: optional `=` before the function body (cpp2 style)",
       match: "(=)(?=\\s*\\{)",
@@ -64,6 +70,10 @@ grammar.repository["hematite-signature"] = {
     },
   ],
 };
+
+// `-> name:` also appears right after closure parameters, i.e. outside the
+// `function definition` context, so expose the rule at the top level too.
+grammar.patterns.unshift({ include: "#hematite-named-return" });
 
 // Only touch the "function definition" rule: put the Hematite rules in front of
 // the built-in signature patterns.

@@ -1,10 +1,14 @@
-# Hematite Syntax Goals v0.4 (review draft)
+# Hematite Syntax Goals v0.5 (review draft)
 
 > Status: draft; the M1 lowering MVP is implemented against this version (see `README.md`)
 > Scope: a syntax layer for Rust, borrowing the Cpp2 (cppfront) function notation
 > Files: `.hm` → lowered to `.rs` → compiled by rustc / cargo
 >
-> **v0.4 changes (per the latest feedback)**: the function body **never contains `ret`**.
+> **v0.5 change**: closures accept the same annotations, e.g.
+> `let f = |x: i32| -> ret: i32 = { x + 1 };`. The `=` is only allowed when an explicit
+> return type is written; plain function pointer types (`fn(i32) -> i32`) are untouched.
+>
+> **v0.4 change**: the function body **never contains `ret`**.
 > The v0.3 "assignment is return" sugar is removed: `ret = e;` is not part of the language;
 > the body is ordinary Rust (a tail expression for the value; `return` only for early
 > exits; nothing for unit functions).
@@ -15,7 +19,7 @@
 
 ## 0. One-liner
 
-The two additions exist **only in the signature**; the function body is 100% normal Rust:
+The additions exist **only in a function or closure signature**; the body is 100% normal Rust:
 
 ```rust
 // 1) named return + optional `=`; the body is a tail expression
@@ -33,6 +37,10 @@ fn log(msg: &str) -> out: () { println!("{msg}"); }
 
 // 4) plain Rust, valid as-is
 fn add_plain(a: i32, b: i32) -> i32 { a + b }
+
+// 5) closures accept the same annotations (an explicit return type needs a block body)
+let double = |x: i32| -> ret: i32 = { x * 2 };
+let describe = |n: i32| -> text: String { format!("{n} doubled is {}", double(n)) };
 ```
 
 Lowering only "erases"; **not a single byte of the body is touched**:
@@ -69,9 +77,10 @@ fn add(a: i32, b: i32) -> i32 { a + b }
 
 | # | Notation | Effect |
 |---|---|---|
-| **G1** | Named return `-> name: Type` | Names the return value in the signature (self-documenting; a placeholder for future named-return/contract/multi-value features) |
-| **G2** | Optional function-body `=` | May be written or omitted; its only meaning is enabling the default name `ret` when the name is omitted (still just a declaration) |
+| **G1** | Named return `-> name: Type` | Names the return value in a function or closure signature (self-documenting; a placeholder for future named-return/contract/multi-value features) |
+| **G2** | Optional body `=` | May be written or omitted; its only meaning is enabling the default name `ret` when the name is omitted (still just a declaration) |
 | **G3** | No slot name in the body | The name is not a variable and is not bound inside the body; use a tail expression (or `return` for early exits), or nothing for unit functions |
+| **G4** | Same sugar on closures | `\|args\| -> [name:] Type [=] { body }`; `=` requires the explicit return type, and a return type requires a block body (a Rust rule) |
 
 Nothing else is added.
 
@@ -86,6 +95,8 @@ fn_tail   := block                    // a normal Rust function body
            | "=" block                // G2: optional style marker, equivalent to the above
 ret       := ret_slot | type          // plain Rust only has `type`
 ret_slot  := ident ":" type           // G1: named return (declaration only)
+
+closure   := "|" patterns "|" ( "->" ret )? ( "=" )? block   // G4
 ```
 
 Static rules:
@@ -98,6 +109,9 @@ Static rules:
   the body is preserved byte for byte.
 - **R4** Any valid return type may be named (`impl Trait`, `dyn Trait`, `!`, tuples, ...) —
   the name does not participate in the type.
+- **R5** A closure `=` is only recognized directly in front of the closure body block and only
+  when the closure writes an explicit return type: `|args| -> name: T = { ... }` or
+  `|args| -> T = { ... }`. Without a return type the body keeps its normal Rust form.
 
 **Parsing strategy**: after `->`, look at two tokens — `ident ":"` (not `::`) ⇒ named return;
 `ident "::"` or anything else ⇒ a normal type path. The body `=` follows the `where` clause;
@@ -123,10 +137,13 @@ the function-body `=`.
 | 10 | `trait T { fn f(&self) -> c: i32; }` | ✅ | declaration-only positions are allowed (the name is documentation) |
 | 11 | `type F = fn(i32) -> i32;` | ✅ | a function pointer type is not a function definition; untouched |
 | 12 | `fn f() -> c: i32 = 1` | ❌ E0001 | `=` must be followed by a block |
-| 13 | closure `\|x\| -> c: T { … }` | ❌ syntax error | closures have no named return; not supported in v0 |
-| 14 | `fn` templates inside `macro_rules!` | ✅ left as-is | the sugar does not reach into macros |
-| 15 | `fn f() -> ret: i32 = { ret = 1; }` | ⚠️ W0001 | the body mentions the slot name and assigns to it ⇒ `hm` warns that there is no such variable; rustc then reports E0425 |
-| 16 | `fn find(xs: &[i32]) -> pos: Option<usize> { if xs.is_empty() { return None; } Some(1) }` | ✅ | `return` is ordinary Rust and is used for early exits; the final value is a tail expression |
+| 13 | `let f = \|x: i32\| -> ret: i32 = { x + 1 };` | ✅ | `let f = \|x: i32\| -> i32 { x + 1 };` |
+| 14 | `let f = \|x: i32\| -> c: i32 { x + 1 };` | ✅ | same, `=` is optional |
+| 15 | `let f = \|\| -> ret: i32 = { 1 };` | ✅ | no-argument closure |
+| 16 | `let f: fn(i32) -> i32 = square;` | ✅ | a function pointer type is not a closure; untouched |
+| 17 | `fn` templates inside `macro_rules!` | ✅ left as-is | the sugar does not reach into macros |
+| 18 | `fn f() -> ret: i32 = { ret = 1; }` | ⚠️ W0001 | the body mentions the slot name and assigns to it ⇒ `hm` warns that there is no such variable; rustc then reports E0425 |
+| 19 | `fn find(xs: &[i32]) -> pos: Option<usize> { if xs.is_empty() { return None; } Some(1) }` | ✅ | `return` is ordinary Rust and is used for early exits; the final value is a tail expression |
 
 ---
 
@@ -167,6 +184,8 @@ Semantics notes:
    named returns / contracts / multi-value returns.
 4. **Position preserving**: deletions never cross lines; columns are compensated, so
    `x.rs:3:59` maps back to `x.hm:3:73`.
+5. **Closures use the same erasure**: `|args| -> name: T = { … }` becomes
+   `|args| -> T { … }`; only the annotation is removed, the body is untouched.
 
 ---
 
@@ -178,9 +197,10 @@ Semantics notes:
 | Generics / `where` clauses / lifetimes / const generics / generic defaults | ✅ |
 | Trait method declarations (no body), declarations inside `extern` blocks | ✅ the name is documentation only |
 | Any return type (`impl Trait` / `dyn` / `!` / tuples, ...) | ✅ the name does not affect the type |
-| Closures | ❌ no named-return syntax |
+| Closures | ✅ `\|args\| -> [name:] Type [=] { body }` — same annotations as functions (the body must be a block when a return type is written) |
 | Inside `macro_rules!` / `macro` definitions | ❌ left as-is; the sugar does not reach into macros |
 | `fn` generated by `quote!` and other proc macros | ❌ cannot be recognized (documented limitation) |
+| Function pointer types (`fn(i32) -> i32` in type position) | ❌ untouched; they do not take the `name:` annotation |
 | `.rs` and `.hm` mixed in one crate, `.hm` files containing pure Rust, pure-Rust crates built with `hm` | ✅ superset; `.rs` copied byte for byte, plain-Rust input equals output |
 
 ---
@@ -224,7 +244,7 @@ error[E0425]: cannot find value `ret` in this scope
 - Multi-value returns `-> (a: T, b: U)`
 - Cpp2 parameter kinds: `out` / `inout` / `move` / `forward`
 - Expression bodies `= expr` (`= { … }` covers the need)
-- Sugar for closures / function types
+- Sugar on function pointer types (annotations on closure *expressions* are supported)
 - Any change to expression grammar, operators or existing token meanings
 - A custom type checker / macro system / runtime library
 
@@ -239,6 +259,7 @@ error[E0425]: cannot find value `ret` in this scope
 | Q3 | Support `-> _: T` (discard the name)? | Support it; equivalent to anonymous |
 | Q4 | Keep `=`? It is now a purely visual marker plus the default-name entry point | Keep it (the cpp2 flavour you originally asked for) |
 | Q5 | File extension `.hm`, command `hm` (`expand`/`build`/`run`) | Implemented in the MVP as specified |
+| Q6 | Also allow `\|args\| = { body }` on closures without a return type? | No: there is nothing to name, and `= {` is too common elsewhere to recognize safely |
 
 ---
 
@@ -247,7 +268,7 @@ error[E0425]: cannot find value `ret` in this scope
 | Stage | Content | Status |
 |---|---|---|
 | M0 | Spec approval | waiting for your confirmation |
-| M1 | Position-preserving lowering MVP (token level, no type checking) | ✅ implemented: `hm expand` / `hm build` / `hm run`, diagnostic mapping and matrix tests |
+| M1 | Position-preserving lowering MVP (token level, no type checking) | ✅ implemented: `hm expand` / `hm build` / `hm run`, functions and closures, diagnostic mapping and matrix tests |
 | M2 | Cargo integration (multi-file crates) | ✅ implemented: mirrors the crate into `target/hematite/<name>/`, `.hm` → `.rs`, runs `cargo build/run`; diagnostics map back to `.hm` |
 | M3 | Complete E0xxx/W0001 + `hm explain` + `hm fmt` | todo |
 | M4 | Works with rust-analyzer (LSP pointing at `target/hematite/` generated code) | todo |
@@ -257,7 +278,18 @@ error[E0425]: cannot find value `ret` in this scope
 
 ## 12. Changelog
 
-### v0.4 (this version)
+### v0.5 (this version)
+
+- **Closures support the same annotations**: `|args| -> [name:] Type [=] { body }`.
+  `=` is only allowed together with an explicit return type, and a return type requires a
+  block body (a Rust rule).
+- Only the `=` directly in front of the closure body block is erased; function pointer
+  types such as `fn(i32) -> i32` are left untouched.
+- New tests cover closures (with/without `=`, no-arg closures, closures inside function
+  bodies, fn-pointer return types) and boolean/bitwise `|` / `||`.
+- `examples/demo.hm` demonstrates closure annotations.
+
+### v0.4
 
 - **No `ret` in the body**: the v0.3 "assignment is return" sugar is removed; `ret = e;`
   is no longer part of the language.
@@ -282,12 +314,13 @@ error[E0425]: cannot find value `ret` in this scope
 
 ## Appendix: cpp2 ↔ Hematite
 
-| Concept | Cpp2 | Hematite v0.4 |
+| Concept | Cpp2 | Hematite v0.5 |
 |---|---|---|
 | Function header | `add: (a: i32, b: i32) -> i32 =` | `fn add(a: i32, b: i32) -> i32` (`=` optional) |
 | Named return | `-> (ret: i32) =` (return parameter list) | `-> ret: i32` (single return, no parens, declaration only) |
 | Return variable | writable variable in the body, returned at the end | **no variable**; use a tail expression (or `return` for early exits) in the body |
 | Default return name | none | `ret` (only available when `=` is written; declaration level) |
 | Function body | `= { … }` or `= expr;` | only `{ … }` (`=` optional) |
+| Closures | (C++ lambdas) | `\|args\| -> [name:] Type [=] { body }` |
 | Multi-value returns | `-> (a: T, b: U)` | non-goal (v0) |
 | Compiler | cppfront lowers to Cpp1 | `hm` lowers to Rust, then rustc takes over |

@@ -105,6 +105,14 @@ async function main() {
   check("`code` has the return-name scope", hasScope(name4, "variable.parameter.return-name.hematite"), JSON.stringify(name4.scopes));
   check("`#` is still highlighted as an attribute", tokenAt(src4, 1, "#").scopes.some((s) => s.includes("attribute") || s.includes("meta")), JSON.stringify(tokenAt(src4, 1, "#").scopes));
 
+  // ---------------------------------------------------------------- case 5
+  console.log("case 5: closure named return");
+  const src5 = "let f = |x: i32| -> ret: i32 = { x + 1 };";
+  check("closure `->` has the arrow scope", hasScope(tokenAt(src5, 1, "->"), "keyword.operator.arrow.hematite"), JSON.stringify(tokenAt(src5, 1, "->").scopes));
+  check("closure `ret` has the return-name scope", hasScope(tokenAt(src5, 1, "ret"), "variable.parameter.return-name.hematite"), JSON.stringify(tokenAt(src5, 1, "ret").scopes));
+  const src6 = "let g = |x: i32| -> i32 { x + 1 };";
+  check("plain closure return type is untouched", !hasScope(tokenAt(src6, 1, "->"), "keyword.operator.arrow.hematite"), JSON.stringify(tokenAt(src6, 1, "->").scopes));
+
   // ---------------------------------------------------------------- dump
   console.log("\nscope snapshot (case 1, line 1):");
   for (const t of tokenizeLines(src1)[0]) {

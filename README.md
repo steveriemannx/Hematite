@@ -11,6 +11,7 @@ fn add(a: i32, b: i32) -> i32 { a + b }
 
 - `-> name: Type`: named return — a signature-only declaration (self-documenting)
 - `= { ... }`: optional `=` — also signature-only; when the name is omitted the default name is `ret`
+- Closures accept the same annotations: `let f = |x: i32| -> ret: i32 = { x + 1 };`
 - The braces contain 100% normal Rust: a tail expression for the value (early exits use `return`),
   nothing for unit functions
 - There is **no** `ret` variable inside the body; lowering deletes only the two signature tokens
@@ -96,12 +97,13 @@ cargo test
 
 Coverage: byte-identical passthrough for plain Rust, both signature styles, `=` inside
 `where` associated-type bindings, generic defaults, `impl Trait` returns, function pointer
-types, strings/comments, `macro_rules!`, nested `fn`, trait declarations, line-count
-preservation, diagnostic position mapping.
+types, closure annotations (with/without `=`, no-arg closures, fn-pointer return types),
+boolean/bitwise `|` / `||`, strings/comments, `macro_rules!`, nested `fn`, trait
+declarations, line-count preservation, diagnostic position mapping.
 
 A few examples:
 
-- `examples/demo.hm`: single file covering named returns / `=` / unit functions / pure Rust
+- `examples/demo.hm`: single file covering named returns / `=` / unit functions / closures / pure Rust
 - `examples/project/`: multi-file cargo crate (`src/main.hm` + `src/math.hm` + plain-Rust `src/util.rs`)
 
 ## Layout

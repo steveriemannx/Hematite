@@ -12,6 +12,8 @@ pub enum Kind {
     ColonColon,
     Eq,
     Semi,
+    Pipe,
+    PipePipe,
     Open(char),
     Close(char),
 }
@@ -90,6 +92,15 @@ pub fn tokenize(src: &str) -> Vec<Token> {
                     }
                     b';' => {
                         toks.push(Token { kind: Kind::Semi, start: i, end: i + 1 });
+                        i += 1;
+                    }
+                    // `|` opens/closes closure parameters; `||` is an empty one.
+                    b'|' if b.get(i + 1) == Some(&b'|') => {
+                        toks.push(Token { kind: Kind::PipePipe, start: i, end: i + 2 });
+                        i += 2;
+                    }
+                    b'|' => {
+                        toks.push(Token { kind: Kind::Pipe, start: i, end: i + 1 });
                         i += 1;
                     }
                     b'(' | b'[' | b'{' => {
@@ -306,6 +317,16 @@ mod tests {
     fn char_literals_are_skipped() {
         let src = "fn f() { let c = '\''; let d = 'x'; let e = '\\'; }";
         assert_eq!(idents(src), vec!["fn", "f", "let", "c", "let", "d", "let", "e"]);
+    }
+
+    #[test]
+    fn pipes_are_tokenized() {
+        let src = "a | b || c";
+        let kinds: Vec<Kind> = tokenize(src).iter().map(|t| t.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![Kind::Ident, Kind::Pipe, Kind::Ident, Kind::PipePipe, Kind::Ident]
+        );
     }
 
     #[test]

@@ -18,6 +18,7 @@ fn add(a: i32, b: i32) -> ret: i32 = {
 | Optional `=` before the body | `=` | `keyword.operator.assignment.fn-body.hematite` |
 | Everything else | `fn`, params, types, `return`, macros, strings… | Rust grammar (`source.rust` rules) |
 
+The same scopes apply inside closure headers, e.g. `|x: i32| -> ret: i32 = { x + 1 }`.
 The scopes reuse standard prefixes (`variable.parameter`, `keyword.operator.*`), so any
 color theme colors them correctly without extra work.
 

@@ -35,9 +35,15 @@ fn sum(xs: &[i32]) -> total: i32 = {
 
 fn main() = {
     log("hematite demo");
+
+    // Closures accept the same return annotations.
+    let double = |x: i32| -> twice: i32 = { x * 2 };
+    let describe = |n: i32| -> text: String { format!("{} doubled is {}", n, double(n)) };
+
     println!("add(2, 3)      = {}", add(2, 3));
     println!("mul(2, 3)      = {}", mul(2, 3));
     println!("classify(-1)   = {}", classify(-1));
     println!("classify(1)    = {}", classify(1));
     println!("sum([1,2,3,4]) = {}", sum(&[1, 2, 3, 4]));
+    println!("closure        = {}", describe(21));
 }

@@ -92,6 +92,14 @@ pub fn expand(src: &str) -> Result<Expansion, Error> {
                 continue;
             }
         }
+        // A closure return annotation starts right after the closing `|`.
+        if t.kind == Kind::FatArrow
+            && i > 0
+            && matches!(toks[i - 1].kind, Kind::Pipe | Kind::PipePipe)
+        {
+            i = parse_closure_return(src, &toks, i, &mut deletions)?;
+            continue;
+        }
         i += 1;
     }
 
@@ -188,6 +196,56 @@ fn parse_fn(
         push_deletion(src, deletions, start, end)?;
     }
 
+    Ok(i)
+}
+
+/// Handle a closure return annotation: `|args| -> [name:] Type [=] { body }`.
+///
+/// Closures with an explicit return type always have a block body in Rust, so this
+/// only has to delete `name:` and (when present) the Hematite `=` before `{`.
+fn parse_closure_return(
+    src: &str,
+    toks: &[Token],
+    arrow_idx: usize,
+    deletions: &mut Vec<(usize, usize)>,
+) -> Result<usize, Error> {
+    let mut i = arrow_idx + 1;
+
+    // Optional named return slot.
+    if let (Some(name), Some(colon)) = (toks.get(i), toks.get(i + 1)) {
+        if name.kind == Kind::Ident && colon.kind == Kind::Colon {
+            let start = extend_left_ws(src, name.start);
+            push_deletion(src, deletions, start, colon.end)?;
+            i += 2;
+        }
+    }
+
+    // Walk the return type until the body block (or the optional `=`).
+    let mut depth = 0i32;
+    while i < toks.len() {
+        match toks[i].kind {
+            Kind::Open(c) => {
+                if depth == 0 && c == '{' {
+                    return Ok(i);
+                }
+                depth += 1;
+            }
+            Kind::Close(_) if depth > 0 => depth -= 1,
+            Kind::Close(_) => return Ok(i),
+            Kind::Eq if depth == 0 => {
+                // Only the `=` directly in front of the body block is Hematite syntax.
+                if kind_at(toks, i + 1) == Some(Kind::Open('{')) {
+                    let t = toks[i];
+                    push_deletion(src, deletions, extend_left_ws(src, t.start), t.end)?;
+                    return Ok(i + 1);
+                }
+                return Ok(i);
+            }
+            Kind::Semi if depth == 0 => return Ok(i),
+            _ => {}
+        }
+        i += 1;
+    }
     Ok(i)
 }
 
@@ -508,6 +566,54 @@ mod tests {
         assert_eq!(exp.warnings.len(), 1);
         let (line, _col) = exp.orig_line_col(exp.warnings[0].offset);
         assert_eq!(line, 1);
+    }
+
+    #[test]
+    fn closure_named_return_with_equals() {
+        let src = "let f = |x: i32| -> ret: i32 = { x + 1 };";
+        assert_eq!(x(src), "let f = |x: i32| -> i32 { x + 1 };");
+    }
+
+    #[test]
+    fn closure_named_return_without_equals() {
+        let src = "let f = |x: i32| -> c: i32 { x + 1 };";
+        assert_eq!(x(src), "let f = |x: i32| -> i32 { x + 1 };");
+    }
+
+    #[test]
+    fn empty_closure_named_return() {
+        let src = "let f = || -> ret: i32 = { 1 };";
+        assert_eq!(x(src), "let f = || -> i32 { 1 };");
+    }
+
+    #[test]
+    fn plain_closure_with_return_type_untouched() {
+        let src = "let f = |x: i32| -> i32 { x + 1 };";
+        assert_eq!(x(src), src);
+    }
+
+    #[test]
+    fn function_pointer_type_in_let_untouched() {
+        let src = "let f: fn(i32) -> i32 = square;";
+        assert_eq!(x(src), src);
+    }
+
+    #[test]
+    fn closure_with_fn_pointer_return_type() {
+        let src = "let f = |x: i32| -> fn(i32) -> i32 = { g };";
+        assert_eq!(x(src), "let f = |x: i32| -> fn(i32) -> i32 { g };");
+    }
+
+    #[test]
+    fn closure_inside_fn_body_transformed() {
+        let src = "fn outer() { let f = |x: i32| -> r: i32 = { x }; }";
+        assert_eq!(x(src), "fn outer() { let f = |x: i32| -> i32 { x }; }");
+    }
+
+    #[test]
+    fn boolean_or_and_bitwise_or_untouched() {
+        let src = "let x = a | b || c;";
+        assert_eq!(x(src), src);
     }
 
     #[test]
