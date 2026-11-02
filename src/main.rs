@@ -11,6 +11,7 @@ hm - Hematite: a cpp2-flavoured syntax layer for Rust
 
 Usage:
   hm expand <file.hm> [-o out.rs]   lower only; print or write the Rust (single file)
+  hm expand <crate-dir>             lower every .hm in a crate into target/hematite/<name>/
   hm build  <file.hm | crate-dir>   lower + compile; a directory must contain Cargo.toml
   hm run    <file.hm | crate-dir>   lower + compile + run
   hm --version | --help
@@ -77,11 +78,12 @@ fn cmd_expand(args: &[String]) -> Result<(), String> {
         }
         i += 1;
     }
-    let input = input.ok_or("missing input file (.hm)")?;
+    let input = input.ok_or("missing input file (.hm) or crate directory")?;
     if Path::new(input).is_dir() {
-        return Err(format!(
-            "`expand` only supports a single file; for a directory use `hm build {input}` or `hm run {input}`"
-        ));
+        if out_path.is_some() {
+            return Err("`-o` only applies to a single file".into());
+        }
+        return expand_crate(Path::new(input));
     }
     let exp = expand_file(input)?;
     match out_path {
@@ -160,7 +162,16 @@ fn build_file(input: &str, run: bool) -> Result<(), String> {
     Ok(())
 }
 
-fn build_crate(dir: &Path, run: bool) -> Result<(), String> {
+/// A crate that has been lowered into `target/hematite/<name>/`.
+struct PreparedCrate {
+    name: String,
+    out_root: PathBuf,
+    mappings: Vec<MappedFile>,
+    expansions: Vec<transpile::Expansion>,
+}
+
+/// Mirror a crate: lower every `.hm` to `.rs` and copy everything else.
+fn prepare_crate(dir: &Path) -> Result<PreparedCrate, String> {
     if !dir.join("Cargo.toml").is_file() {
         return Err(format!(
             "`{}` is not a Hematite crate (no Cargo.toml); pass a single .hm file instead",
@@ -170,8 +181,9 @@ fn build_crate(dir: &Path, run: bool) -> Result<(), String> {
     let name = dir
         .file_name()
         .and_then(|s| s.to_str())
-        .ok_or_else(|| format!("cannot get a directory name from `{}`", dir.display()))?;
-    let out_root = PathBuf::from("target/hematite").join(name);
+        .ok_or_else(|| format!("cannot get a directory name from `{}`", dir.display()))?
+        .to_string();
+    let out_root = PathBuf::from("target/hematite").join(&name);
     if out_root.exists() {
         fs::remove_dir_all(&out_root)
             .map_err(|e| format!("failed to clean `{}`: {e}", out_root.display()))?;
@@ -182,6 +194,43 @@ fn build_crate(dir: &Path, run: bool) -> Result<(), String> {
     let mut mappings: Vec<MappedFile> = Vec::new();
     let mut expansions: Vec<transpile::Expansion> = Vec::new();
     mirror(dir, Path::new(""), &out_root, &mut mappings, &mut expansions)?;
+    Ok(PreparedCrate {
+        name,
+        out_root,
+        mappings,
+        expansions,
+    })
+}
+
+/// `hm expand <crate-dir>`: generate all `.rs` files without compiling.
+fn expand_crate(dir: &Path) -> Result<(), String> {
+    let prepared = prepare_crate(dir)?;
+    let mut generated: Vec<&str> = prepared
+        .mappings
+        .iter()
+        .filter(|m| m.expansion.is_some())
+        .map(|m| m.generated.as_str())
+        .collect();
+    generated.sort();
+
+    println!(
+        "hm: generated {} .rs file(s) in {}",
+        generated.len(),
+        prepared.out_root.display()
+    );
+    for path in generated {
+        println!("  {}", prepared.out_root.join(path).display());
+    }
+    Ok(())
+}
+
+fn build_crate(dir: &Path, run: bool) -> Result<(), String> {
+    let PreparedCrate {
+        name,
+        out_root,
+        mappings,
+        expansions,
+    } = prepare_crate(dir)?;
 
     let cwd = env::current_dir().map_err(|e| format!("failed to get the current directory: {e}"))?;
     let cargo_target = cwd.join("target/hematite").join(format!("{name}-target"));

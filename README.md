@@ -35,10 +35,12 @@ cargo build --release
 # single file: lower + build + run
 ./target/release/hm run examples/demo.hm
 
-# multi-file project: any directory that contains a Cargo.toml
-#   - the crate is mirrored into target/hematite/<name>/
+# multi-file: lower every .hm in a crate into target/hematite/<name>/,
+# without compiling (all .rs files are generated together)
+./target/release/hm expand examples/project
+
+# multi-file: same mirror, but then run cargo build / cargo run inside it
 #   - .hm becomes .rs, everything else is copied (target/ and .git/ are skipped)
-#   - cargo build / cargo run then runs inside the mirror
 ./target/release/hm build examples/project
 ./target/release/hm run   examples/project
 ```
