@@ -102,6 +102,7 @@ preservation, diagnostic position mapping.
 A few examples:
 
 - `examples/demo.hm`: single file covering named returns / `=` / unit functions / pure Rust
+- `examples/ret.hm`: every named return is `ret`, the default name
 - `examples/project/`: multi-file cargo crate (`src/main.hm` + `src/math.hm` + plain-Rust `src/util.rs`)
 
 ## Layout
@@ -112,6 +113,7 @@ src/lexer.rs           # small tokenizer: skips comments/strings/char literals/l
 src/transpile.rs       # lowering: delete `name:` and the optional `=`, plus position mapping
 src/main.rs            # hm CLI: expand / build / run (single file + crate) + diagnostic mapping
 examples/demo.hm       # single-file example
+examples/ret.hm        # single-file example where every named return is `ret`
 examples/project/      # multi-file cargo crate example (main.hm + math.hm + util.rs)
 editors/vscode/        # VS Code syntax highlighting extension (.hm)
 ```
